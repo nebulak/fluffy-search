@@ -1,0 +1,107 @@
+#!/usr/bin/env python
+
+from PyPDF2 import PdfFileReader
+import hashlib
+import os
+
+basePath = "./data"
+
+def get_page_count(filename):
+    pdf = PdfFileReader(open(filename, 'rb'))
+    return pdf.getNumPages()
+
+
+def create_file_index(filename):
+    create_dir(basePath)
+    if(is_indexed(filename)):
+        return
+    # //TODO: use file content instead
+    index_path = basePath + "/" + sha256_sum(filename)
+    create_dir(index_path)
+    page_count = get_page_count(filename)
+    for i in range(1, page_count):
+        cmd = "pdftotext -f " + str(i) + " -l " + str(i) + " " + filename + " " + index_path + "/" + str(i) + ".txt"
+        os.system(cmd)
+
+
+def is_indexed(filename):
+    dirname = sha256_sum(filename)
+    if os.path.exists(basePath + "/" + dirname):
+        return True
+    return False
+
+def sha256_sum(filename, block_size=65536):
+    sha256 = hashlib.sha256()
+    with open(filename, 'rb') as f:
+        for block in iter(lambda: f.read(block_size), b''):
+            sha256.update(block)
+        return sha256.hexdigest()
+
+
+def create_dir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
+def get_filename(path):
+    split_path = path.rsplit('/', 1)
+
+    if len(split_path) == 1:
+        return split_path[0]
+    return split_path[1]
+
+
+def get_page_from_filename(filename):
+    return filename.rsplit('.', 1)[0]
+
+def index_files(rootdir):
+    for subdir, dirs, files in os.walk(rootdir):
+        for file in files:
+            #print os.path.join(subdir, file)
+            filepath = subdir + os.sep + file
+
+            if filepath.endswith(".pdf"):
+                print(filepath)
+                create_file_index(filepath)
+
+
+def pdf_search(keywords):
+    for subdir, dirs, files in os.walk("."):
+        for file in files:
+            #print os.path.join(subdir, file)
+            filepath = subdir + os.sep + file
+
+            if filepath.endswith(".pdf"):
+                search_in_file(filepath, keywords)
+
+
+def search_in_file(path, keywords):
+    filename = get_filename(path)
+    index_dir = basePath + "/" + sha256_sum(filename)
+    for subdir, dirs, files in os.walk(index_dir):
+        for file in files:
+            do_print = False
+            with open(index_dir + "/" + file) as openfile:
+                for line in openfile:
+                    for keyword in keywords:
+                        if keyword in line:
+                            do_print = True
+            if do_print is True:
+                print(filename + ":" + get_page_from_filename(file))
+                do_print = False
+
+#index_files(".")
+#search(["ansible"])
+
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("command", help="commands: search | index",
+                    type=str)
+parser.add_argument("value", help="commands: search | index",
+                    type=str)
+args = parser.parse_args()
+if args.command == "search":
+    pdf_search([args.value])
+
+if args.command == "index":
+    index_files(args.value)
